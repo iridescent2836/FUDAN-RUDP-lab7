@@ -40,3 +40,6 @@ venv.bak/
 
 # local settings
 .local/
+
+# local storage
+127.*

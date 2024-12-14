@@ -20,7 +20,7 @@ class Sender(BasicSender.BasicSender):
         self.sackMode = sackMode
         self.bufferSize = 1460
         self.timer = [None, None, None, None, None]
-        self.TimeoutInterval = 0.5
+        self.timeout = 0.5
         # store the packet inside the window
         self.data = [None, None, None, None, None]
         self.lock = threading.Lock()
@@ -31,9 +31,9 @@ class Sender(BasicSender.BasicSender):
         self.send(start_packet)
         self.data[0] = start_packet
         if self.sackMode:
-            self.timer[0] = threading.Timer(self.TimeoutInterval, self.handle_timeout_sack, [0])
+            self.timer[0] = threading.Timer(self.timeout, self.handle_timeout_sack, [0])
         else:
-            self.timer[0] = threading.Timer(self.TimeoutInterval, self.handle_timeout)
+            self.timer[0] = threading.Timer(self.timeout, self.handle_timeout)
         self.timer[0].start()
         self.log("send start packet: %s" % start_packet)
         
@@ -43,8 +43,6 @@ class Sender(BasicSender.BasicSender):
             msg_type, seqno, data, checksum = self.split_packet(sack)
             if not Checksum.validate_checksum(sack):
                 self.log("received corrupt ack: %s" % sack)
-                
-                    
             if msg_type == 'ack':
                 self.log("receive ack: %s" % sack)
                 self.handle_new_ack(seqno)
@@ -75,11 +73,11 @@ class Sender(BasicSender.BasicSender):
                 self.log("sent: %s" % packet)
                 # update timer
                 if self.sackMode:
-                    self.timer[self.nextSeqNum % self.windowSize] = threading.Timer(self.TimeoutInterval,
+                    self.timer[self.nextSeqNum % self.windowSize] = threading.Timer(self.timeout,
                                                                                 self.handle_timeout_sack,
                                                                                 [self.nextSeqNum])
                 else:
-                    self.timer[self.nextSeqNum % self.windowSize] = threading.Timer(self.TimeoutInterval,
+                    self.timer[self.nextSeqNum % self.windowSize] = threading.Timer(self.timeout,
                                                                             self.handle_timeout)
                 self.timer[self.nextSeqNum % self.windowSize].start()
                 
@@ -87,7 +85,6 @@ class Sender(BasicSender.BasicSender):
                 msg = next_msg
                 
             self.receive_ack()
-
             
         return msg
     
@@ -96,11 +93,11 @@ class Sender(BasicSender.BasicSender):
         self.send(end_packet)
         self.data[self.nextSeqNum % self.windowSize] = end_packet
         if self.sackMode:
-            self.timer[self.nextSeqNum % self.windowSize] = threading.Timer(self.TimeoutInterval,
+            self.timer[self.nextSeqNum % self.windowSize] = threading.Timer(self.timeout,
                                                                         self.handle_timeout_sack,
                                                                         [self.nextSeqNum])
         else:
-            self.timer[self.nextSeqNum % self.windowSize] = threading.Timer(self.TimeoutInterval,
+            self.timer[self.nextSeqNum % self.windowSize] = threading.Timer(self.timeout,
                                                                             self.handle_timeout)
             
         self.timer[self.nextSeqNum % self.windowSize].start()
@@ -128,7 +125,7 @@ class Sender(BasicSender.BasicSender):
         # Reset the timer and resend packets from base to nextSeqNum
         for i in range(self.base, self.nextSeqNum):
             self.timer[i % self.windowSize].cancel()
-            self.timer[i % self.windowSize] = threading.Timer(self.TimeoutInterval, self.handle_timeout)
+            self.timer[i % self.windowSize] = threading.Timer(self.timeout, self.handle_timeout)
             self.timer[i % self.windowSize].start()
             packet = self.data[i % self.windowSize]
             self.send(packet)
@@ -139,7 +136,7 @@ class Sender(BasicSender.BasicSender):
         # Only resend the timed-out packet
         self.timer[num % self.windowSize].cancel()
         # print('timeout resend',num)
-        self.timer[num % self.windowSize] = threading.Timer(self.TimeoutInterval, self.handle_timeout_sack, [num])
+        self.timer[num % self.windowSize] = threading.Timer(self.timeout, self.handle_timeout_sack, [num])
         self.timer[num % self.windowSize].start()
         packet = self.data[num % self.windowSize]
         self.send(packet)
@@ -158,6 +155,7 @@ class Sender(BasicSender.BasicSender):
                 # Remove non-numeric elements from sack
                 sack = [int(i) for i in sack if i.isdigit()]
                 
+                # base packet successfully sent, update timer and base
                 if int(cum_ack) > self.base:
                     for i in range(self.base,int(cum_ack)):
                         if self.timer[i % self.windowSize] is not None:
@@ -168,9 +166,9 @@ class Sender(BasicSender.BasicSender):
                     # print('cum_ack',cum_ack)
                     self.base = int(cum_ack)
                     self.log("received ack: %s" % cum_ack)
+                # base packet failed to be sent, resend. 
                 elif int(cum_ack) == self.base:
                     self.handle_dup_ack(int(cum_ack))
-                    
                 for i in sack:
                     # If the timer for the corresponding packet in sack is
                     # still running, remove it from timer
@@ -179,6 +177,8 @@ class Sender(BasicSender.BasicSender):
                         self.timer[i % self.windowSize].cancel()
                         self.timer[i % self.windowSize] = None
                         self.log("received sack: %s" % i)
+            # make sure even if the Receiver is set to go-back-n mode,
+            # the program can still function well. 
             else:
                 if ack == self.base:
                     # print(self.base, self.nextSeqNum)
@@ -204,14 +204,14 @@ class Sender(BasicSender.BasicSender):
                 self.log("receive ack: %s" % ack)
 
     def handle_dup_ack(self, ack):
-         # If a duplicate ack is received, it means
-         # the base packet has not been received.
+        # If a duplicate ack is received, it means
+        # the base packet has not been received.
         # Reset the timer and resend the base packet
         print('dup ack', ack)
         packet = self.data[ack % self.windowSize]
         self.send(packet)
         self.timer[ack % self.windowSize].cancel()
-        self.timer[ack % self.windowSize] = threading.Timer(self.TimeoutInterval, self.handle_timeout_sack,
+        self.timer[ack % self.windowSize] = threading.Timer(self.timeout, self.handle_timeout_sack,
                                                                   [ack])
         self.timer[ack % self.windowSize].start()
 
