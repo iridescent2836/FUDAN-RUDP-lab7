@@ -1,0 +1,42 @@
+# Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# Distribution/Packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# VS Code settings
+.vscode/
+
+# PyCharm settings
+.idea/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python virtualenv
+.venv/
+
+# MySQL Python dump files
+*.sql
+
+# Test coverage
+.coverage
+*.cover
+*.py,cover
+
+# pytest cache
+.cache/
+
+# dotenv files
+.env
+.env.*
+
+# local settings
+.local/
